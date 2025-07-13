@@ -1,8 +1,7 @@
-// 需要安装的依赖：ali-oss
-const OSS = require('ali-oss');
+import OSS from 'ali-oss';
 
 export default async function handler(req, res) {
-  // 配置OSS客户端（使用环境变量）
+  // 配置 OSS 客户端
   const client = new OSS({
     region: process.env.OSS_REGION,
     accessKeyId: process.env.OSS_ACCESS_KEY_ID,
@@ -10,42 +9,59 @@ export default async function handler(req, res) {
     bucket: 'my-coze-images1'
   });
 
-  // 你的五个文件夹
+  // 学科文件夹列表
   const folders = [
     'wuli/', 'yuwen/', 'shuxue/', 
     'yingyu/', 'dili/'
   ];
 
   try {
-    const result = {};
+    const results = {};
     
     for (const folder of folders) {
-      // 获取文件夹内所有文件
+      // 列出文件夹内所有文件
       const list = await client.list({
         prefix: folder,
-        'max-keys': 100
+        'max-keys': 1000
       });
 
-      // 过滤图片文件
+      // 过滤出图片文件（排除文件夹本身）
       const images = (list.objects || []).filter(item => 
-        item.name !== folder &&  // 排除文件夹本身
-        /\.(jpg|jpeg|png|gif|webp)$/i.test(item.name)
+        item.name !== folder && 
+        /\.(jpe?g|png|gif|webp|bmp)$/i.test(item.name)
       );
 
       // 随机选择一张图片
       if (images.length > 0) {
-        const randomImage = images[Math.floor(Math.random() * images.length)];
-        // 生成公开访问URL
+        const randomIndex = Math.floor(Math.random() * images.length);
+        const image = images[randomIndex];
+        
+        // 生成公开访问 URL
         const folderName = folder.replace('/', '');
-        result[folderName] = `https://my-coze-images1.${process.env.OSS_REGION}.aliyuncs.com/${randomImage.name}`;
+        results[folderName] = `https://my-coze-images1.${process.env.OSS_REGION}.aliyuncs.com/${image.name}`;
+      } else {
+        results[folder.replace('/', '')] = null;
       }
     }
 
-    res.status(200).json(result);
+    // 返回结果
+    res.status(200).json({
+      success: true,
+      message: '图片获取成功',
+      data: results
+    });
+    
   } catch (error) {
-    res.status(500).json({ 
-      error: '获取图片失败', 
-      details: error.message 
+    // 错误处理
+    console.error('OSS访问错误:', error);
+    res.status(500).json({
+      success: false,
+      message: '图片获取失败',
+      error: error.message,
+      details: {
+        region: process.env.OSS_REGION,
+        bucket: 'my-coze-images1'
+      }
     });
   }
 }
